@@ -1,0 +1,143 @@
+---
+# ServiceAccount + RBAC：允许工具读取 KubeSphere User CRD
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-role-sync-web
+  namespace: kubesphere-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jenkins-role-sync-web
+rules:
+  # 读取 User CRD
+  - apiGroups: ["iam.kubesphere.io"]
+    resources: ["users"]
+    verbs: ["get", "list", "watch"]
+  # 读取 Secret（用于获取 Jenkins 密码）
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+    resourceNames: ["jenkins-admin-credentials"]  # 按需调整
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jenkins-role-sync-web
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: jenkins-role-sync-web
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-role-sync-web
+    namespace: kubesphere-system
+---
+# Jenkins 管理员密码 Secret（请替换为实际密码）
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jenkins-admin-credentials
+  namespace: kubesphere-system
+type: Opaque
+stringData:
+  password: "YOUR_JENKINS_ADMIN_PASSWORD_OR_API_TOKEN"
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins-role-sync-web
+  namespace: kubesphere-system
+  labels:
+    app: jenkins-role-sync-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins-role-sync-web
+  template:
+    metadata:
+      labels:
+        app: jenkins-role-sync-web
+    spec:
+      serviceAccountName: jenkins-role-sync-web
+      containers:
+        - name: web
+          image: jenkins-role-sync-web:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: JENKINS_HOST
+              value: "http://jenkins.kubesphere-devops-system:8080"
+            - name: JENKINS_USER
+              value: "admin"
+            - name: JENKINS_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: jenkins-admin-credentials
+                  key: password
+            - name: JENKINS_TIMEOUT
+              value: "30"
+            - name: ROLE_NAME
+              value: "admin"
+            - name: ROLE_TYPE
+              value: "globalRoles"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-role-sync-web
+  namespace: kubesphere-system
+spec:
+  selector:
+    app: jenkins-role-sync-web
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http
+  type: ClusterIP
+---
+# Ingress（可选，用于外部访问）
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jenkins-role-sync-web
+  namespace: kubesphere-system
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+    - host: jenkins-sync.kubesphere.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jenkins-role-sync-web
+                port:
+                  number: 80
