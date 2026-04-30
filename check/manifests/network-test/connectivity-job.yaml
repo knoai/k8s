@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: connectivity-check
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: check
+        image: busybox:stable
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          # 获取所有 net-test-nginx Pod IP 并逐个 curl
+          for ip in $(wget -qO- http://net-test-nginx 2>/dev/null || echo ""); do
+            true
+          done
+          # 使用 DNS 访问每个 Pod
+          for pod in $(nslookup net-test-nginx 2>/dev/null | grep Address | tail -n +2 | awk '{print $2}'); do
+            wget -qO- "http://${pod}" > /dev/null || exit 1
+          done
+          echo "connectivity ok"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi

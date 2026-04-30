@@ -1,0 +1,7 @@
+report/
+docs/
+*.log
+.DS_Store
+.git/
+.gitignore
+charts/

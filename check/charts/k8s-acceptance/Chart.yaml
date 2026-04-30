@@ -1,0 +1,13 @@
+apiVersion: v2
+name: k8s-acceptance
+description: K8s 集群一键验收测试工具（容器化 Helm Chart）
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kubernetes
+  - acceptance
+  - testing
+  - helm
+maintainers:
+  - name: platform-team

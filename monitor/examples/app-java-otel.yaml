@@ -1,0 +1,119 @@
+# Java 应用接入 OpenTelemetry 示例
+# 通过 Kubernetes Init Container 注入 OTel Java Agent
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+      annotations:
+        # 启用 Prometheus 自动抓取
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        # 下载 OTel Java Agent
+        - name: download-otel-agent
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              curl -L -o /otel-agent/opentelemetry-javaagent.jar \
+                https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.0.0/opentelemetry-javaagent.jar
+          volumeMounts:
+            - name: otel-agent
+              mountPath: /otel-agent
+      
+      containers:
+        - name: order-service
+          image: your-registry/order-service:v1.2.0
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9464
+              name: metrics
+          
+          env:
+            # JVM 参数：挂载 OTel Agent
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/otel-agent/opentelemetry-javaagent.jar"
+            
+            # OTel 核心配置
+            - name: OTEL_SERVICE_NAME
+              value: "order-service"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.namespace=production,service.version=v1.2.0,deployment.environment=production"
+            
+            # 导出器配置
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp,prometheus"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
+            
+            # OTLP 端点
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.monitoring:4317"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            
+            # 采样率：100% 采样（测试环境），生产环境建议 1-10%
+            - name: OTEL_TRACES_SAMPLER
+              value: "traceidratio"
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.1"
+            
+            # Prometheus 端口
+            - name: OTEL_EXPORTER_PROMETHEUS_PORT
+              value: "9464"
+            
+            # 日志中注入 TraceID
+            - name: OTEL_INSTRUMENTATION_LOG4J_APPENDER_EXPERIMENTAL_CAPTURE_MDC_ATTRIBUTES
+              value: "trace_id,span_id,trace_flags"
+          
+          volumeMounts:
+            - name: otel-agent
+              mountPath: /otel-agent
+          
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+      
+      volumes:
+        - name: otel-agent
+          emptyDir: {}
+---
+# Service 配置
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: production
+  labels:
+    app: order-service
+spec:
+  selector:
+    app: order-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+    - name: metrics
+      port: 9464
+      targetPort: 9464

@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dns-check
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: check
+        image: busybox:stable
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          nslookup kubernetes.default.svc.cluster.local
+          nslookup net-test-nginx
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi

@@ -1,0 +1,10 @@
+# Operator CR 生命周期测试示例模板
+# 请根据实际 CRD 修改此文件，或放置多个 CR 文件到本目录
+# 脚本会尝试 apply 此文件并检查 status.conditions 中 Ready/Available 为 True
+apiVersion: example.com/v1
+kind: ExampleApp
+metadata:
+  name: sample-cr
+spec:
+  replicas: 1
+  image: nginx:alpine

@@ -1,0 +1,134 @@
+# 镜像配置
+image:
+  repository: k8s-acceptance
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# 集群标识（用于通知和导出）
+clusterName: "k8s-cluster"
+
+# ServiceAccount 配置
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# RBAC 配置
+rbac:
+  create: true
+  extraRules: []
+
+# Job 通用配置
+job:
+  enabled: true
+  restartPolicy: OnFailure
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  activeDeadlineSeconds: 1800
+
+# CronJob 配置（启用后会替代一次性 Job）
+cronjob:
+  enabled: false
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+
+# 验收测试开关与参数（对应 config.env，通过环境变量注入）
+config:
+  checkEnv: true
+  checkNode: true
+  checkCore: true
+  checkNetwork: true
+  checkStorage: true
+  checkScheduling: true
+  checkSecurity: true
+  checkHa: true
+  checkOperator: true
+  checkPerformance: false
+  timeoutPodReady: 120
+  timeoutDeploymentReady: 180
+  timeoutJobComplete: 180
+  timeoutPvcBind: 120
+  timeoutOperatorCr: 300
+  nodeReadyMinRatio: 1.0
+  apiserverLatencyMsMax: 500
+  etcdHealthyMin: 1
+  corePodReadyMinRatio: 1.0
+  operatorLabels: ""
+  operatorTestNs: ""
+  operatorCrLifecycleTest: true
+  perfNetworkConnections: 4
+  perfNetworkDuration: 10
+  perfStorageFileSize: "1G"
+  perfSchedulingPods: 50
+  acceptanceCleanup: true
+  testNsPrefix: "k8s-acceptance"
+
+# 自定义 Operator CR（用于 Operator/CRD 专项验收）
+customManifests:
+  enabled: false
+  sampleCR: |
+    # 在此处填写你的自定义 CR 内容
+    # apiVersion: example.com/v1
+    # kind: MyResource
+    # metadata:
+    #   name: test-cr
+    # spec:
+    #   replicas: 1
+
+# 通知配置
+notification:
+  feishu:
+    enabled: false
+    # 飞书自定义机器人 Webhook URL
+    # 建议通过 secrets.feishuWebhookUrl 或 existingSecret 注入，避免明文
+    webhookUrl: ""
+
+# 报告导出配置
+export:
+  s3:
+    enabled: false
+    endpoint: ""          # 如: https://minio.example.com 或 http://minio:9000
+    bucket: ""
+    keyPrefix: "k8s-acceptance"
+    region: "us-east-1"
+    # 凭证建议通过 secrets 注入，避免明文
+    accessKey: ""
+    secretKey: ""
+  http:
+    enabled: false
+    url: ""               # 接收端点，支持 multipart/form-data
+
+# 敏感信息（会自动创建 Secret）
+secrets:
+  create: true
+  feishuWebhookUrl: ""
+  s3AccessKey: ""
+  s3SecretKey: ""
+  # 或使用已有的 Secret
+  existingSecretName: ""
+  feishuWebhookUrlKey: "feishu-webhook-url"
+  s3AccessKeyKey: "s3-access-key"
+  s3SecretKeyKey: "s3-secret-key"
+
+# 报告持久化配置
+report:
+  persistence:
+    enabled: false
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 1Gi
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

@@ -1,0 +1,11 @@
+{{- if .Values.customManifests.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "k8s-acceptance.fullname" . }}-custom-manifests
+  labels:
+    {{- include "k8s-acceptance.labels" . | nindent 4 }}
+data:
+  sample-cr.yaml: |
+    {{- .Values.customManifests.sampleCR | nindent 4 }}
+{{- end }}

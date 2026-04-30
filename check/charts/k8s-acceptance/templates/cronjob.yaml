@@ -1,0 +1,75 @@
+{{- if .Values.cronjob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "k8s-acceptance.fullname" . }}
+  labels:
+    {{- include "k8s-acceptance.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.cronjob.schedule | quote }}
+  concurrencyPolicy: {{ .Values.cronjob.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ .Values.cronjob.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.cronjob.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.job.backoffLimit }}
+      ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+      {{- if .Values.job.activeDeadlineSeconds }}
+      activeDeadlineSeconds: {{ .Values.job.activeDeadlineSeconds }}
+      {{- end }}
+      template:
+        metadata:
+          labels:
+            {{- include "k8s-acceptance.selectorLabels" . | nindent 12 }}
+        spec:
+          serviceAccountName: {{ include "k8s-acceptance.serviceAccountName" . }}
+          restartPolicy: {{ .Values.job.restartPolicy }}
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: acceptance
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "k8s-acceptance.fullname" . }}-config
+              env:
+                {{- include "k8s-acceptance.env" . | nindent 16 }}
+              volumeMounts:
+                - name: report
+                  mountPath: /opt/k8s-acceptance/report
+                {{- if .Values.customManifests.enabled }}
+                - name: custom-manifests
+                  mountPath: /opt/k8s-acceptance/manifests/operator-test/sample-cr.yaml
+                  subPath: sample-cr.yaml
+                {{- end }}
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+          volumes:
+            - name: report
+              {{- if .Values.report.persistence.enabled }}
+              persistentVolumeClaim:
+                claimName: {{ include "k8s-acceptance.fullname" . }}-report
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+            {{- if .Values.customManifests.enabled }}
+            - name: custom-manifests
+              configMap:
+                name: {{ include "k8s-acceptance.fullname" . }}-custom-manifests
+            {{- end }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

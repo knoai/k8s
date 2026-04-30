@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduling-test
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: scheduling-test
+  template:
+    metadata:
+      labels:
+        app: scheduling-test
+    spec:
+      terminationGracePeriodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - scheduling-test
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: busybox
+        image: busybox:stable
+        command: ["/bin/sh", "-c", "sleep 3600"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi

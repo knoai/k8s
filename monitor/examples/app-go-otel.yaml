@@ -1,0 +1,154 @@
+# Go 应用接入 OpenTelemetry 示例
+# Go 需要代码层面集成 SDK（无法自动注入）
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: payment-service
+          image: your-registry/payment-service:v1.2.0
+          ports:
+            - containerPort: 8080
+              name: http
+          
+          env:
+            # OTel 核心配置
+            - name: OTEL_SERVICE_NAME
+              value: "payment-service"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.namespace=production,service.version=v1.2.0,deployment.environment=production"
+            
+            # OTLP 端点
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.monitoring:4317"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            
+            # 采样配置
+            - name: OTEL_TRACES_SAMPLER
+              value: "parentbased_traceidratio"
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.1"
+          
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+---
+# Go 应用示例代码 (main.go)
+# 请保存到业务代码仓库中
+
+/*
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	"go.opentelemetry.io/otel/trace"
+)
+
+var tracer trace.Tracer
+
+func initTracer() func() {
+	ctx := context.Background()
+
+	// 创建 OTLP Exporter
+	exporter, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+		otlptracegrpc.WithInsecure(),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 创建 Resource
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(os.Getenv("OTEL_SERVICE_NAME")),
+			attribute.String("service.namespace", "production"),
+			attribute.String("deployment.environment", "production"),
+		),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 创建 TracerProvider
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	tracer = tp.Tracer("payment-service")
+
+	return func() {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := tp.Shutdown(ctx); err != nil {
+			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+	}
+}
+
+func paymentHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracer.Start(r.Context(), "process-payment")
+	defer span.End()
+
+	// 添加业务属性
+	span.SetAttributes(
+		attribute.String("payment.method", "credit_card"),
+		attribute.Float64("payment.amount", 99.99),
+	)
+
+	// 模拟处理
+	time.Sleep(50 * time.Millisecond)
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Payment processed"))
+}
+
+func main() {
+	shutdown := initTracer()
+	defer shutdown()
+
+	// 使用 otelhttp 包装 handler，自动记录 HTTP 指标和链路
+	handler := otelhttp.NewHandler(http.HandlerFunc(paymentHandler), "payment")
+
+	mux := http.NewServeMux()
+	mux.Handle("/pay", handler)
+	mux.Handle("/metrics", promhttp.Handler()) // Prometheus metrics
+
+	log.Println("Server starting on :8080")
+	log.Fatal(http.ListenAndServe(":8080", mux))
+}
+*/

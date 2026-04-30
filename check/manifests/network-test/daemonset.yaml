@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: net-test-nginx
+spec:
+  selector:
+    matchLabels:
+      app: net-test-nginx
+  template:
+    metadata:
+      labels:
+        app: net-test-nginx
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi

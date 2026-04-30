@@ -1,0 +1,75 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "k8s-acceptance.fullname" . }}
+  labels:
+    {{- include "k8s-acceptance.labels" . | nindent 4 }}
+rules:
+  # 核心集群资源
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - pods
+      - pods/exec
+      - pods/log
+      - services
+      - endpoints
+      - persistentvolumeclaims
+      - persistentvolumes
+      - namespaces
+      - serviceaccounts
+      - configmaps
+      - events
+      - resourcequotas
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # 工作负载
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - daemonsets
+      - replicasets
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # 网络
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingressclasses
+    verbs: ["get", "list"]
+  # CRD
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources:
+      - customresourcedefinitions
+    verbs: ["get", "list"]
+  # 权限自检查 (kubectl auth can-i)
+  - apiGroups: ["authorization.k8s.io"]
+    resources:
+      - selfsubjectaccessreviews
+    verbs: ["create"]
+  # 自定义资源（Operator/CRD 测试需要 apply 任意 CR）
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "create", "delete"]
+  {{- with .Values.rbac.extraRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "k8s-acceptance.fullname" . }}
+  labels:
+    {{- include "k8s-acceptance.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "k8s-acceptance.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "k8s-acceptance.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

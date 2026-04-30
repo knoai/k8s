@@ -1,0 +1,129 @@
+# Hubble (Cilium) eBPF 网络可观测部署
+# 前提：集群已安装 Cilium CNI
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hubble
+---
+# Hubble Relay：聚合各节点观测数据
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hubble-relay
+  namespace: hubble
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hubble-relay
+  template:
+    metadata:
+      labels:
+        app: hubble-relay
+    spec:
+      containers:
+        - name: hubble-relay
+          image: quay.io/cilium/hubble-relay:v1.15.0
+          command:
+            - hubble-relay
+          args:
+            - serve
+            - --listen=unix:///var/run/hubble/sock
+            - --dial-timeout=30s
+            - --retry-timeout=1m
+            - --peer-service=unix:///var/run/cilium/hubble.sock
+          ports:
+            - containerPort: 4245
+              name: grpc
+          volumeMounts:
+            - name: hubble-sock-dir
+              mountPath: /var/run/hubble
+            - name: cilium-sock-dir
+              mountPath: /var/run/cilium
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: hubble-sock-dir
+          emptyDir: {}
+        - name: cilium-sock-dir
+          hostPath:
+            path: /var/run/cilium
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hubble-relay
+  namespace: hubble
+spec:
+  selector:
+    app: hubble-relay
+  ports:
+    - name: grpc
+      port: 80
+      targetPort: 4245
+---
+# Hubble UI：可视化网络流量拓扑
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hubble-ui
+  namespace: hubble
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hubble-ui
+  template:
+    metadata:
+      labels:
+        app: hubble-ui
+    spec:
+      containers:
+        - name: frontend
+          image: quay.io/cilium/hubble-ui:v0.12.0
+          ports:
+            - containerPort: 8081
+              name: http
+        - name: backend
+          image: quay.io/cilium/hubble-ui-backend:v0.12.0
+          env:
+            - name: EVENTS_SERVER_PORT
+              value: "8090"
+            - name: FLOWS_API_ADDR
+              value: "hubble-relay:80"
+          ports:
+            - containerPort: 8090
+              name: grpc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hubble-ui
+  namespace: hubble
+spec:
+  selector:
+    app: hubble-ui
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8081
+---
+# Hubble 网络流数据导出到 Prometheus
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hubble-metrics-config
+  namespace: kube-system
+data:
+  # Cilium ConfigMap 中添加以下配置
+  # hubble-metrics: "dns:query drop tcp flow icmp http"
+  # hubble-listen-address: ":4244"
+  # enable-hubble: "true"
+  prometheus-serve-addr: ":9090"

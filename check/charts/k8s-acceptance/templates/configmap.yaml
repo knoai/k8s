@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "k8s-acceptance.fullname" . }}-config
+  labels:
+    {{- include "k8s-acceptance.labels" . | nindent 4 }}
+data:
+  CHECK_ENV: {{ .Values.config.checkEnv | quote }}
+  CHECK_NODE: {{ .Values.config.checkNode | quote }}
+  CHECK_CORE: {{ .Values.config.checkCore | quote }}
+  CHECK_NETWORK: {{ .Values.config.checkNetwork | quote }}
+  CHECK_STORAGE: {{ .Values.config.checkStorage | quote }}
+  CHECK_SCHEDULING: {{ .Values.config.checkScheduling | quote }}
+  CHECK_SECURITY: {{ .Values.config.checkSecurity | quote }}
+  CHECK_HA: {{ .Values.config.checkHa | quote }}
+  CHECK_OPERATOR: {{ .Values.config.checkOperator | quote }}
+  CHECK_PERFORMANCE: {{ .Values.config.checkPerformance | quote }}
+  TIMEOUT_POD_READY: {{ .Values.config.timeoutPodReady | quote }}
+  TIMEOUT_DEPLOYMENT_READY: {{ .Values.config.timeoutDeploymentReady | quote }}
+  TIMEOUT_JOB_COMPLETE: {{ .Values.config.timeoutJobComplete | quote }}
+  TIMEOUT_PVC_BIND: {{ .Values.config.timeoutPvcBind | quote }}
+  TIMEOUT_OPERATOR_CR: {{ .Values.config.timeoutOperatorCr | quote }}
+  NODE_READY_MIN_RATIO: {{ .Values.config.nodeReadyMinRatio | quote }}
+  APISERVER_LATENCY_MS_MAX: {{ .Values.config.apiserverLatencyMsMax | quote }}
+  ETCD_HEALTHY_MIN: {{ .Values.config.etcdHealthyMin | quote }}
+  CORE_POD_READY_MIN_RATIO: {{ .Values.config.corePodReadyMinRatio | quote }}
+  OPERATOR_LABELS: {{ .Values.config.operatorLabels | quote }}
+  OPERATOR_TEST_NS: {{ .Values.config.operatorTestNs | quote }}
+  OPERATOR_CR_LIFECYCLE_TEST: {{ .Values.config.operatorCrLifecycleTest | quote }}
+  PERF_NETWORK_CONNECTIONS: {{ .Values.config.perfNetworkConnections | quote }}
+  PERF_NETWORK_DURATION: {{ .Values.config.perfNetworkDuration | quote }}
+  PERF_STORAGE_FILE_SIZE: {{ .Values.config.perfStorageFileSize | quote }}
+  PERF_SCHEDULING_PODS: {{ .Values.config.perfSchedulingPods | quote }}
+  ACCEPTANCE_CLEANUP: {{ .Values.config.acceptanceCleanup | quote }}
+  TEST_NS_PREFIX: {{ .Values.config.testNsPrefix | quote }}

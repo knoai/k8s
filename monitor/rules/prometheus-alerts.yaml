@@ -1,0 +1,161 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubernetes-critical-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: prometheus
+spec:
+  groups:
+    # ==================== 节点层告警 ====================
+    - name: node-alerts
+      rules:
+        - alert: NodeCPUHighUsage
+          expr: |
+            100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "节点 {{ $labels.instance }} CPU 使用率过高"
+            description: "CPU 使用率: {{ $value }}%，持续超过 5 分钟"
+
+        - alert: NodeMemoryHighUsage
+          expr: |
+            (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "节点 {{ $labels.instance }} 内存使用率过高"
+            description: "内存使用率: {{ $value }}%，持续超过 5 分钟"
+
+        - alert: NodeDiskPressure
+          expr: |
+            (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 85
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "节点 {{ $labels.instance }} 磁盘空间不足"
+            description: "磁盘使用率: {{ $value }}%"
+
+        - alert: NodeNotReady
+          expr: |
+            kube_node_status_condition{condition="Ready",status="false"} == 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "节点 {{ $labels.node }} 不可用"
+            description: "节点 Ready 状态为 false，持续超过 2 分钟"
+
+    # ==================== Pod 层告警 ====================
+    - name: pod-alerts
+      rules:
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total[10m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} 频繁重启"
+            description: "Namespace: {{ $labels.namespace }}, Container: {{ $labels.container }}"
+
+        - alert: PodOOMKilled
+          expr: |
+            kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} 发生 OOM"
+            description: "Namespace: {{ $labels.namespace }}, Container: {{ $labels.container }} 被 OOMKill"
+
+        - alert: PodNotReady
+          expr: |
+            kube_pod_status_phase{phase=~"Pending|Unknown|Failed"} == 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} 状态异常"
+            description: "当前状态: {{ $labels.phase }}"
+
+        - alert: HighPodMemoryUsage
+          expr: |
+            (container_memory_working_set_bytes{container!=""} / container_spec_memory_limit_bytes{container!=""}) > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} 内存使用率过高"
+            description: "内存使用率: {{ $value | humanizePercentage }}"
+
+    # ==================== 应用层告警 (基于 OTel 指标) ====================
+    - name: application-alerts
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(http_server_duration_count{status_code=~"5.."}[5m])) by (service_name)
+            / sum(rate(http_server_duration_count[5m])) by (service_name) > 0.05
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "服务 {{ $labels.service_name }} 错误率过高"
+            description: "5xx 错误率: {{ $value | humanizePercentage }}"
+
+        - alert: HighLatencyP99
+          expr: |
+            histogram_quantile(0.99, sum(rate(http_server_duration_bucket[5m])) by (le, service_name)) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "服务 {{ $labels.service_name }} P99 延迟过高"
+            description: "P99 延迟: {{ $value }}s"
+
+        - alert: ServiceTrafficDrop
+          expr: |
+            sum(rate(http_server_duration_count[5m])) by (service_name) < 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "服务 {{ $labels.service_name }} 流量骤降"
+            description: "QPS 接近 0，可能存在可用性问题"
+
+    # ==================== K8s 控制面告警 ====================
+    - name: kubernetes-control-plane
+      rules:
+        - alert: APIServerHighLatency
+          expr: |
+            histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le, verb)) > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "API Server {{ $labels.verb }} 请求延迟过高"
+
+        - alert: ETCDHighCommitDuration
+          expr: |
+            histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m])) > 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ETCD 写入延迟过高"
+            description: "WAL fsync P99: {{ $value }}s"
+
+        - alert: SchedulerPendingPodsHigh
+          expr: |
+            sum(kube_pod_status_phase{phase="Pending"}) > 50
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "大量 Pod 处于 Pending 状态"
+            description: "Pending Pod 数量: {{ $value }}"
