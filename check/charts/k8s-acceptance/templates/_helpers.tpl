@@ -19,6 +19,7 @@ Create a default fully qualified app name.
 {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 {{- end }}
+{{- end }}
 
 {{/*
 Create the name of the secret to use
@@ -28,7 +29,6 @@ Create the name of the secret to use
 {{- .Values.secrets.existingSecretName }}
 {{- else }}
 {{- include "k8s-acceptance.fullname" . }}
-{{- end }}
 {{- end }}
 {{- end }}
 
